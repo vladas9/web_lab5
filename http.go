@@ -110,6 +110,10 @@ func fetchOnce(rawUrl string) (*Response, error) {
 }
 
 func fetch(rawUrl string) (*Response, error) {
+	if resp, ok := cacheGet(rawUrl); ok {
+		return resp, nil
+	}
+
 	current := rawUrl
 	for range 10 {
 		resp, err := fetchOnce(current)
@@ -117,6 +121,9 @@ func fetch(rawUrl string) (*Response, error) {
 			return nil, err
 		}
 		if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+			if ttl := ttlFromHeaders(resp.Headers); ttl > 0 {
+				cacheSet(rawUrl, resp, ttl)
+			}
 			return resp, nil
 		}
 		loc := resp.Headers["location"]
