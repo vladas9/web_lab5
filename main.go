@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 type Response struct {
@@ -18,33 +20,7 @@ type Response struct {
 	Body       string
 }
 
-func fetch(rawUrl string) (*Response, error) {
-	url, err := url.Parse(rawUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	ports := map[string]string{"http": "80", "https": "443"}
-	port, ok := ports[url.Scheme]
-	if !ok {
-		return nil, fmt.Errorf("unsupported scheme: %s", url.Scheme)
-	}
-	addr := url.Hostname() + ":" + port
-
-	var conn net.Conn
-	if url.Scheme == "https" {
-		conn, err = tls.Dial("tcp", addr, &tls.Config{ServerName: url.Hostname()})
-	} else {
-		conn, err = net.Dial("tcp", addr)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
-		url.RequestURI(), url.Hostname())
-
+func readConn(conn net.Conn) (*Response, error) {
 	reader := bufio.NewReader(conn)
 
 	statusLine, err := reader.ReadString('\n')
@@ -77,6 +53,58 @@ func fetch(rawUrl string) (*Response, error) {
 	return &Response{StatusCode: code, Headers: headers, Body: string(body)}, nil
 }
 
+func extractText(n *html.Node) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+	result := ""
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		result += extractText(c)
+	}
+	return result
+}
+
+func parseHTML(body string) string {
+	doc, _ := html.Parse(strings.NewReader(body))
+	return extractText(doc)
+}
+
+func fetch(rawUrl string) (*Response, error) {
+	url, err := url.Parse(rawUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	ports := map[string]string{"http": "80", "https": "443"}
+	port, ok := ports[url.Scheme]
+	if !ok {
+		return nil, fmt.Errorf("unsupported scheme: %s", url.Scheme)
+	}
+	addr := url.Hostname() + ":" + port
+
+	var conn net.Conn
+	if url.Scheme == "https" {
+		conn, err = tls.Dial("tcp", addr, &tls.Config{ServerName: url.Hostname()})
+	} else {
+		conn, err = net.Dial("tcp", addr)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
+		url.RequestURI(), url.Hostname())
+
+	resp, err := readConn(conn)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 func printHelp() {
 	fmt.Println(`go2web - HTTP over TCP sockets
 
@@ -107,8 +135,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Status: %d\n\n", resp.StatusCode)
-		fmt.Println(resp)
+		fmt.Println(parseHTML(resp.Body))
 	case "-s":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "error: -s requires a search term")
