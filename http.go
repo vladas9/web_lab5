@@ -103,7 +103,7 @@ func fetchOnce(rawUrl string) (*Response, error) {
 	}
 	defer conn.Close()
 
-	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: go2web/1.0\r\nConnection: close\r\n\r\n",
+	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: go2web/1.0\r\nAccept: text/html,application/json\r\nConnection: close\r\n\r\n",
 		u.RequestURI(), u.Hostname())
 
 	return readConn(conn)

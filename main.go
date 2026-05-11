@@ -36,7 +36,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
-		fmt.Println(parseHTML(resp.Body))
+		fmt.Println(formatBody(resp))
 	case "-s":
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "error: -s requires a search term")

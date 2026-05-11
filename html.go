@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -33,4 +34,18 @@ func hasClass(n *html.Node, cls string) bool {
 func parseHTML(body string) string {
 	doc, _ := html.Parse(strings.NewReader(body))
 	return extractText(doc)
+}
+
+func formatBody(resp *Response) string {
+	ct := resp.Headers["content-type"]
+	if strings.Contains(ct, "application/json") {
+		var v any
+		if err := json.Unmarshal([]byte(resp.Body), &v); err == nil {
+			if pretty, err := json.MarshalIndent(v, "", "  "); err == nil {
+				return string(pretty)
+			}
+		}
+		return resp.Body
+	}
+	return parseHTML(resp.Body)
 }
